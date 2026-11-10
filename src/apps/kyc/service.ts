@@ -150,7 +150,7 @@ async function secondApproval(
 
   const updated =
     decision === "approve"
-      ? await transition(tx, kase, { status: "approved", decisionNote: input.note })
+      ? await transition(tx, kase, { status: "approved", ...(input.note ? { decisionNote: input.note } : {}) })
       : await transition(tx, kase, { status: "rejected", decisionNote: input.note, rejectionReasonCode: input.reasonCode ?? null });
   await recordAudit(tx, {
     actor: user,

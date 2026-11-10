@@ -170,6 +170,16 @@ describe("decision notes", () => {
     });
   });
 
+  it("keeps the analyst's decision note when the second approver leaves the note blank", async () => {
+    await claimCase(ana, "KYC-1019");
+    await approveCase(ana, "KYC-1019", "Documents verified");
+    await approveCase(marcus, "KYC-1019", "   ");
+    expect(await prisma.kycCase.findUniqueOrThrow({ where: { id: "KYC-1019" } })).toMatchObject({
+      status: "approved",
+      decisionNote: "Documents verified",
+    });
+  });
+
   it("masks SSN-shaped text in notes before storing them on the case and in the audit log", async () => {
     await claimCase(ana, "KYC-1016");
     await escalateCase(ana, "KYC-1016", "Customer gave SSN 123-45-6789 by phone");

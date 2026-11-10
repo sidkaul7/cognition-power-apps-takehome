@@ -42,7 +42,7 @@ Seed four fake users. The sign-in page lists them so anyone can switch roles qui
 | User | Role | Role in the demo |
 | --- | --- | --- |
 | Ana Lima | KYC Analyst | Claims cases, decides them, and gives the first approval on high-risk ones |
-| Marcus Reed | Compliance Lead | Gives the second approval on high-risk cases and can reveal PII |
+| Marcus Reed | Compliance Lead | Gives the second approval on High cases, approves or rejects escalated cases, and can reveal PII |
 | Priya Shah | Support Agent | Has no KYC access, which shows the permission checks at work |
 | Sam Park | Platform Admin | Reviews the audit log and checks its integrity |
 
@@ -51,7 +51,7 @@ Permissions are defined once in `src/platform/rbac` and must match this table.
 | Permission | KYC Analyst | Compliance Lead | Support Agent | Platform Admin |
 | --- | --- | --- | --- | --- |
 | `kyc:view` | yes | yes | no | yes |
-| `kyc:claim` | yes | yes | no | no |
+| `kyc:claim` | yes | no | no | no |
 | `kyc:decide` | yes | yes | no | no |
 | `kyc:approve_high_risk` | no | yes | no | no |
 | `kyc:reveal_pii` | no | yes | no | no |
@@ -72,24 +72,32 @@ Everything in this section lives in `src/platform` and is shared by every tool.
 ### Permissions
 
 - `can(user, permission)` and `requirePermission(user, permission)` live in `src/platform/rbac`
-- Every page load and every server action checks permissions on the server, even when the UI already hides the control
-- A denied request returns a 403 page and is written to the audit log
+- Every page, server action, and route handler checks permissions on the server through one shared wrapper, even when the UI already hides the control
+- A denied page shows a 403 page
+- A denied server action returns a 403 error, and the UI shows it as a message
+- Both kinds of denial write an `auth.denied` audit event, with the record fields left empty when there is no record
 
 ### Audit log
 
 - `recordAudit()` stores the actor, action, record type, record ID, before and after values, reason, and timestamp
 - Each change and its audit event are written in the same database transaction
 - No code path updates or deletes an audit event
-- Each event stores the previous event's hash, and its own hash is a SHA-256 of that hash plus the event's canonical JSON
+- Action names are `auth.sign_in`, `auth.denied`, `case.create`, `case.claim`, `case.approve`, `case.reject`, `case.escalate`, `approval.request`, `approval.approve`, `approval.reject`, and `pii.reveal`
+- Each event stores the previous event's hash
+- Each event's own hash is the SHA-256 of its canonical JSON, which covers every field except the event's ID and its own hash
+- Canonical JSON includes the previous event's hash, sorts keys alphabetically, and writes timestamps in ISO 8601 UTC
 - `verifyAuditChain()` recomputes the chain and reports the first broken event, if there is one
-- The audit page filters by actor, record, and date, and its "Verify integrity" button runs the check
-- Audit events never contain unmasked PII
+- The audit page filters by actor, record, and date range, and its "Verify integrity" button runs the check
+- Before and after values go through the masking rules, so audit events never contain unmasked PII
 
 ### PII masking
 
 - SSN, date of birth, street address, and ID document number count as PII
 - They display masked by default, such as `***-**-1234` for an SSN and `**/**/1990` for a date of birth
-- Revealing a value requires `kyc:reveal_pii` and a typed reason, lasts for that page view only, and writes a `pii.reveal` audit event
+- Revealing a value requires `kyc:reveal_pii` and a typed reason
+- Each field is revealed on its own, and the server returns the value only in response to that reveal request
+- A revealed value is masked again when the page reloads
+- Each reveal writes its own `pii.reveal` audit event naming the field
 
 ### Approvals
 
@@ -102,12 +110,12 @@ Everything in this section lives in `src/platform` and is shared by every tool.
 
 - Each tool registers its ID, name, description, path, icon, and required permission in `src/apps/registry.ts`
 - The home page and sidebar are built from the registry and show only the tools the user can access
-- The refunds dashboard and feature-flag admin panel are registered as planned and appear on the home page as tiles without links
+- The refunds dashboard and feature-flag admin panel are registered as planned and appear on the home page as greyed-out tiles with a "Planned" badge and no link
 - Adding a tool takes one folder and one registry entry, with no changes to the shell
 
 ### Shared components
 
-- A data table with server-side filtering, sorting, search, and pagination
+- A data table with server-side filtering, sorting on any column, case-insensitive search, and pagination at 20 rows per page
 - A status badge, a record detail layout, a decision panel, and a reason dialog
 - Tools use these components instead of building their own
 
@@ -115,17 +123,23 @@ Everything in this section lives in `src/platform` and is shared by every tool.
 
 ### Data
 
-- Each case has an ID, customer name, email, SSN, date of birth, address, country, ID document type and number, risk level, risk score, screening hits, status, assignee, created time, and SLA due time
+- Each case has an ID, customer name, email, SSN, date of birth, address, country, ID documents, risk level, risk score, screening hits, status, assignee, created time, and SLA due time
+- Each case has one or two ID documents, each a passport, driver's license, or national ID card, with a document number
 - Risk level is Low, Medium, or High, and the risk score runs 0-100
-- Screening hits are sanctions, politically exposed person, or adverse media matches, each with a match score
+- Screening hits are sanctions, politically exposed person, or adverse media matches, each with a match score of 0-100
+- Match scores inform the reviewer and don't change the rules
 - Status is New, In review, Pending second approval, Approved, Rejected, or Escalated
-- Seed 40 cases with a mix of risk levels, about a third with screening hits, and several that have missed their 48-hour SLA
+- The SLA due time is 48 hours after creation, and age is the time since creation
+- The seed is fixed, so every reset loads the same data
+- Seed 40 cases with a mix of risk levels, about a third with screening hits, at least five unassigned High-risk cases, and several that have missed their SLA
+- The seed writes a `case.create` audit event for each case
 
 ### Queue page
 
 - Filters cover status, risk level, and assignee (me, unassigned, or all), plus search by name or case ID
 - Columns show case ID, customer, risk, status, assignee, age, and SLA, with breached SLAs in red
 - Cases sort by SLA due time by default
+- For the Compliance Lead, the queue opens filtered to Escalated cases
 - A Claim button assigns an unassigned case to the current user and moves it to In review
 
 ### Case page
@@ -133,16 +147,22 @@ Everything in this section lives in `src/platform` and is shared by every tool.
 - The customer profile shows PII masked, with a reveal control for users who have the permission
 - The page shows ID documents (file names only), screening hits, and the risk score
 - A history lists every audit event on the case
-- A decision panel offers Approve, Reject, and Escalate
+- A decision panel offers Approve, Reject, and Escalate, showing only the actions the rules allow
 
 ### Rules
 
 - Analysts can decide only the cases they have claimed
+- Claimed cases can't be released or reassigned
+- Approving takes an optional note
 - Approving a Low or Medium case sets it to Approved
 - Approving a High case sets it to Pending second approval and creates an approval request that needs `kyc:approve_high_risk`
+- Compliance Leads give the second approval on High cases
 - The second approver must be a different person from the first
-- Rejecting requires a reason code (document mismatch, sanctions match, incomplete, or other) and a note
-- Escalating sets the case to Escalated and adds it to the Compliance Lead's view
+- If the second approver rejects, the case moves to Rejected with their reason
+- Rejecting requires a reason code (document mismatch, sanctions match, incomplete, or other) and a note, and never needs a second approval
+- Escalating requires a note, sets the case to Escalated, and adds it to the Compliance Lead's queue
+- Cases waiting for a second approval can't be escalated
+- Compliance Leads approve or reject escalated cases without claiming them, and their decision is final
 - Every status change writes an audit event
 
 ### Acceptance criteria
@@ -151,6 +171,8 @@ Everything in this section lives in `src/platform` and is shared by every tool.
 - When Ana approves a High case, it moves to Pending second approval and appears in Marcus's "My approvals"
 - When Ana calls the approval action directly on a case she decided, the server rejects it
 - When Marcus approves that case, it moves to Approved, and the audit log shows both decisions
+- When Marcus rejects a case pending second approval, it moves to Rejected with his reason
+- When Ana escalates a case with a note, it moves to Escalated and appears in Marcus's queue, and Marcus's decision on it is final
 - Ana sees the SSN masked and has no reveal control
 - When Marcus reveals the SSN with a reason, the audit log records a `pii.reveal` event with his name and reason but not the SSN
 - Priya sees no KYC tile, and opening a KYC URL returns 403
@@ -164,9 +186,12 @@ Everything in this section lives in `src/platform` and is shared by every tool.
 - Zod validation on every form and server action
 - Vitest unit tests for permissions, the two-person rule, the audit chain and tamper detection, masking, and KYC status changes
 - A GitHub Actions workflow that runs lint, typecheck, and tests on Ubuntu, macOS, and Windows for every pull request
-- No network calls at runtime
-- Runs on macOS, Windows, and Linux with the current Node.js LTS release, so scripts use Node rather than shell-specific commands
-- No manual setup beyond the three commands, with no `.env` file to copy and development defaults for the database path and session secret
+- No calls to external services at runtime
+- Node 24 LTS and npm, pinned in `.nvmrc` and the `engines` field in `package.json`
+- Runs on macOS, Windows, and Linux, so scripts use Node rather than shell-specific commands
+- No manual setup beyond `npm install`, `npm run db:reset`, and `npm run dev`, with no `.env` file to copy and development defaults for the database path and session secret
+- The default session secret is for the demo only
+- Each platform module is only as general as the KYC queue and the Skill need
 - A `.gitattributes` file that keeps LF line endings, so lint passes on Windows
 
 Folder layout:
@@ -224,14 +249,14 @@ The README explains what the project does and how to run it. It should be concis
 1. Title and a two-sentence summary
 2. One screenshot of the KYC queue, saved as `docs/kyc-queue.png`
 3. Overview: the problem, the controls the prototype demonstrates, and the Power Apps mapping above as a short table
-4. Getting started: prerequisites and the commands to install, set up the database, and run the app on macOS or Windows
+4. Getting started: prerequisites and the commands to install, set up the database, and run the app on macOS or Windows, with a note that the default session secret is for the demo only
 5. Demo: the four users, what each can do, and the walkthrough below
 6. Project structure: a short annotated folder tree
 7. Testing: the test, lint, and typecheck commands
 8. Adding a tool: how the registry and the Skill work together
 9. Limitations and next steps, covering:
    - What is mocked today, such as sign-in and the seed data
-   - What production would need, such as real SSO, Postgres with backups, a deployment pipeline, and a security review
+   - What production would need, such as real SSO, Postgres with backups, write-once audit storage, a deployment pipeline, and a security review
    - The next tools to build with the Skill, starting with the feature-flag admin panel and then the refunds dashboard
    - Other additions worth making, such as notifications, a real screening vendor, and migrating cases from Dataverse
 

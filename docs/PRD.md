@@ -104,9 +104,6 @@ Everything in this section lives in `src/platform` and is shared by every tool.
 - `requestApproval()` and `decideApproval()` live in `src/platform/approvals` and work for any tool
 - The server rejects an approval from anyone who lacks the required permission or who made the request
 - A rejection requires a reason
-- Rejecting never needs a second approval
-- If the second approver rejects, the case moves to Rejected with their reason
-- Escalating requires a note, approving takes an optional note, and only rejection uses the reason codes
 - A "My approvals" page lists every pending approval the signed-in user can act on
 
 ### App registry and shell
@@ -129,7 +126,7 @@ Everything in this section lives in `src/platform` and is shared by every tool.
 - Each case has an ID, customer name, email, SSN, date of birth, address, country, ID documents, risk level, risk score, screening hits, status, assignee, created time, and SLA due time
 - Each case has one or two ID documents, each a passport, driver's license, or national ID card, with a document number
 - Risk level is Low, Medium, or High, and the risk score runs 0-100
-- Screening hits are sanctions, politically exposed person, or adverse media matches, each with a match score from 0-100
+- Screening hits are sanctions, politically exposed person, or adverse media matches, each with a match score of 0-100
 - Match scores inform the reviewer and don't change the rules
 - Status is New, In review, Pending second approval, Approved, Rejected, or Escalated
 - The SLA due time is 48 hours after creation, and age is the time since creation

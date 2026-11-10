@@ -6,7 +6,7 @@ A prototype showing that internal tools now built in Microsoft Power Apps can be
 
 ## Overview
 
-The company runs three internal tools on Power Apps: a KYC review queue, a refunds dashboard, and a feature-flag admin panel. Licenses cost about $250K a year and at least 10 more tools are planned. This prototype tests whether those tools can move to code, starting with the hardest one.
+The company runs three internal tools on Power Apps: a KYC review queue, a refunds dashboard, and a feature-flag admin panel. Licenses cost about $250K a year, and at least 10 more tools are planned. This prototype tests whether those tools can move to code, starting with the hardest one.
 
 The prototype demonstrates these controls:
 
@@ -54,7 +54,7 @@ The sign-in page lists four fake users. Use "Switch user" in the header to chang
 | Ana Lima | KYC Analyst | Claims cases, decides them, and gives the first approval on High-risk ones |
 | Marcus Reed | Compliance Lead | Gives the second approval on High cases, approves or rejects escalated cases, and can reveal PII |
 | Priya Shah | Support Agent | Has no KYC access, which shows the permission checks at work |
-| Sam Park | Platform Admin | Reviews the audit log and checks its integrity. KYC case pages are read-only for Sam |
+| Sam Park | Platform Admin | Reviews the audit log, checks its integrity, and can view KYC cases without changing them |
 
 | Permission | KYC Analyst | Compliance Lead | Support Agent | Platform Admin |
 | --- | --- | --- | --- | --- |
@@ -121,9 +121,9 @@ Each tool lives in `src/apps/<tool-id>` and has one entry in `src/apps/registry.
 
 What is mocked today:
 
-- Sign-in is a demo user picker. Swap `src/platform/auth` for OIDC with Okta or Entra ID
-- All customers, documents, and screening hits are seed data. Screening lists are fictional
-- Files are listed by name only; there is no document storage or viewer
+- Sign-in is a demo user picker, to be replaced with OIDC through Okta or Entra ID in src/platform/auth
+- All customers, documents, and screening hits are seed data, and the screening lists are fictional
+- Documents are listed by file name only, with no storage or viewer
 
 What production would need:
 

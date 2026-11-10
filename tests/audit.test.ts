@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { buildSeedCases } from "../prisma/seed-data";
 import { recordAudit, verifyAuditChain } from "@/platform/audit";
-import { GENESIS_HASH, canonicalJson } from "@/platform/audit/hash";
+import { GENESIS_HASH, canonicalJson, hashAuditEvent } from "@/platform/audit/hash";
 import { prisma } from "@/platform/db";
 import { claimCase, revealCaseField } from "@/apps/kyc/service";
 import { ana, marcus, seedDatabase } from "./helpers";
@@ -62,5 +62,15 @@ describe("audit hash chain", () => {
     const events = await prisma.auditEvent.findMany({ orderBy: { id: "asc" }, take: 6 });
     await prisma.$executeRaw`DELETE FROM AuditEvent WHERE id = ${events[4].id}`;
     expect(await verifyAuditChain()).toMatchObject({ ok: false, brokenEventId: events[5].id });
+  });
+});
+
+describe("free-text reasons", () => {
+  it("masks SSN-shaped text in the reason before hashing and storing it", async () => {
+    const event = await prisma.$transaction((tx) =>
+      recordAudit(tx, { actor: marcus, action: "pii.reveal", recordType: "kyc_case", recordId: "KYC-1003", reason: "Matches 987654321 on file" }),
+    );
+    expect(event.reason).toBe("Matches ***-**-4321 on file");
+    expect(hashAuditEvent(event)).toBe(event.hash);
   });
 });

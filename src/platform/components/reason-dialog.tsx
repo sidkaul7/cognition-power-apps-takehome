@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { ActionResult } from "@/platform/rbac/guards";
 
+export const NO_PII_HINT = "Don't type PII such as SSNs, dates of birth, addresses, or ID numbers. Notes are stored and shown in the audit log.";
+
 export type ReasonCodeOption = { value: string; label: string };
 export type ReasonValues = { note: string; reasonCode?: string };
 
@@ -30,6 +32,22 @@ export type ReasonDialogProps = {
   reasonCodes?: ReasonCodeOption[];
   onConfirm: (values: ReasonValues) => Promise<ActionResult<unknown>>;
 };
+
+/** The note box, with a reminder not to type PII. */
+export function ReasonNoteField(props: { label: string; required: boolean; value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor="reason-note">
+        {props.label}
+        {props.required ? "" : " (optional)"}
+      </Label>
+      <Textarea id="reason-note" value={props.value} onChange={(event) => props.onChange(event.target.value)} rows={3} aria-describedby="reason-note-hint" />
+      <p id="reason-note-hint" className="text-xs text-muted-foreground">
+        {NO_PII_HINT}
+      </p>
+    </div>
+  );
+}
 
 /** Collects a typed reason (and optional reason code) before a sensitive action, and shows server errors. */
 export function ReasonDialog(props: ReasonDialogProps) {
@@ -85,13 +103,7 @@ export function ReasonDialog(props: ReasonDialogProps) {
               </select>
             </div>
           ) : null}
-          <div className="space-y-1.5">
-            <Label htmlFor="reason-note">
-              {noteLabel}
-              {noteRequired ? "" : " (optional)"}
-            </Label>
-            <Textarea id="reason-note" value={note} onChange={(event) => setNote(event.target.value)} rows={3} />
-          </div>
+          <ReasonNoteField label={noteLabel} required={noteRequired} value={note} onChange={setNote} />
           {error ? (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>

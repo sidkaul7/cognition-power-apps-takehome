@@ -4,7 +4,7 @@ import { revealCaseField } from "@/apps/kyc/service";
 import { getMaskedCase, listQueue } from "@/apps/kyc/queries";
 import { prisma } from "@/platform/db";
 import { ForbiddenError, RuleError } from "@/platform/errors";
-import { maskAddress, maskDateOfBirth, maskDocumentNumber, maskRecord, maskSsn } from "@/platform/pii";
+import { maskAddress, maskDateOfBirth, maskDocumentNumber, maskRecord, maskSsn, maskSsnsInText } from "@/platform/pii";
 import { parseTableParams } from "@/platform/components/data-table/params";
 import { QUEUE_SORT_KEYS } from "@/apps/kyc/queries";
 import { ana, marcus, sam, seedDatabase } from "./helpers";
@@ -57,5 +57,20 @@ describe("reveal", () => {
     const reveals = await prisma.auditEvent.findMany({ where: { action: "pii.reveal" }, orderBy: { id: "asc" } });
     expect(reveals.map((e) => JSON.parse(e.after!))).toEqual([{ field: "dateOfBirth" }, { field: "documentNumber", documentId: doc.id }]);
     expect(reveals.map((e) => e.reason)).toEqual(["Age check", "Match passport"]);
+  });
+});
+
+describe("SSN-shaped text in notes", () => {
+  it("masks SSNs written with dashes, spaces, or no separator, keeping the last four digits", () => {
+    expect(maskSsnsInText("SSN 123-45-6789 confirmed")).toBe("SSN ***-**-6789 confirmed");
+    expect(maskSsnsInText("123 45 6789")).toBe("***-**-6789");
+    expect(maskSsnsInText("ssn:123456789.")).toBe("ssn:***-**-6789.");
+    expect(maskSsnsInText("a 111-22-3333 and b 444-55-6666")).toBe("a ***-**-3333 and b ***-**-6666");
+  });
+
+  it("leaves text that is not shaped like an SSN alone", () => {
+    for (const text of ["Case KYC-1013", "Score 92, list OFAC SDN", "1234567890", "123-456-7890", "12-345-6789", "123-45 6789", ""]) {
+      expect(maskSsnsInText(text)).toBe(text);
+    }
   });
 });

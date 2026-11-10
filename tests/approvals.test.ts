@@ -56,3 +56,15 @@ describe("two-person rule", () => {
     expect(await listActionableApprovals(ana)).toEqual([]);
   });
 });
+
+describe("approval reasons", () => {
+  it("masks SSN-shaped text in the reason on the approval and in its audit event", async () => {
+    const approval = await request(marcus, "R-SSN");
+    const decided = await prisma.$transaction((tx) =>
+      decideApproval(tx, { approvalId: approval.id, decider: secondLead, decision: "reject", reason: "SSN 123-45-6789 does not match" }),
+    );
+    expect(decided.reason).toBe("SSN ***-**-6789 does not match");
+    const event = await prisma.auditEvent.findFirstOrThrow({ where: { recordId: "R-SSN", action: "approval.reject" } });
+    expect(event.reason).toBe("SSN ***-**-6789 does not match");
+  });
+});

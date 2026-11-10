@@ -158,3 +158,25 @@ describe("escalation", () => {
     expect(await prisma.approval.count({ where: { recordId: "KYC-1007" } })).toBe(0);
   });
 });
+
+describe("decision notes", () => {
+  it("saves the second approver's note as the case's decision note", async () => {
+    await claimCase(ana, "KYC-1013");
+    await approveCase(ana, "KYC-1013", "Hits are false positives");
+    await approveCase(marcus, "KYC-1013", "Confirmed the hits are false positives");
+    expect(await prisma.kycCase.findUniqueOrThrow({ where: { id: "KYC-1013" } })).toMatchObject({
+      status: "approved",
+      decisionNote: "Confirmed the hits are false positives",
+    });
+  });
+
+  it("masks SSN-shaped text in notes before storing them on the case and in the audit log", async () => {
+    await claimCase(ana, "KYC-1016");
+    await escalateCase(ana, "KYC-1016", "Customer gave SSN 123-45-6789 by phone");
+    const kase = await prisma.kycCase.findUniqueOrThrow({ where: { id: "KYC-1016" } });
+    expect(kase.decisionNote).toBe("Customer gave SSN ***-**-6789 by phone");
+    const escalation = (await eventsFor("KYC-1016")).find((e) => e.action === "case.escalate");
+    expect(escalation?.reason).toBe("Customer gave SSN ***-**-6789 by phone");
+    expect((await eventsFor("KYC-1016")).map((e) => e.reason ?? "").join(" ")).not.toContain("123-45-6789");
+  });
+});

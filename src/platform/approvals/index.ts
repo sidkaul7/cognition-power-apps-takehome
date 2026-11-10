@@ -4,6 +4,7 @@ import { recordAudit } from "../audit";
 import { ForbiddenError, NotFoundError, RuleError } from "../errors";
 import { can, type Actor } from "../rbac/can";
 import { PERMISSIONS, type Permission } from "../rbac/permissions";
+import { maskSsnsInText } from "../pii/mask";
 
 export type ApprovalStatus = "pending" | "approved" | "rejected";
 
@@ -66,7 +67,8 @@ export async function decideApproval(tx: Tx, input: DecideInput): Promise<Approv
   if (approval.requestedById === input.decider.id) {
     throw new RuleError("Two-person rule: the person who requested an approval cannot decide it.");
   }
-  const reason = input.reason?.trim() || null;
+  const trimmed = input.reason?.trim();
+  const reason = trimmed ? maskSsnsInText(trimmed) : null;
   if (input.decision === "reject" && !reason) throw new RuleError("A rejection requires a reason.");
 
   const status: ApprovalStatus = input.decision === "approve" ? "approved" : "rejected";

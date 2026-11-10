@@ -1,5 +1,5 @@
 import { prisma, type Tx } from "../db";
-import { maskRecord } from "../pii/mask";
+import { maskRecord, maskSsnsInText } from "../pii/mask";
 import type { Actor } from "../rbac/can";
 import { GENESIS_HASH, canonicalJson, hashAuditEvent } from "./hash";
 
@@ -37,7 +37,7 @@ function serialize(value: unknown): string | null {
 /**
  * Appends an audit event to the hash chain. Always pass the `tx` of the transaction
  * that makes the change, so the change and its event commit or fail together.
- * Before/after values are masked, so events never contain unmasked PII.
+ * Before/after values are masked and SSN-shaped text in the reason is masked, so events never contain unmasked PII.
  */
 export async function recordAudit(tx: Tx, input: AuditInput) {
   const last = await tx.auditEvent.findFirst({ orderBy: { id: "desc" }, select: { hash: true } });
@@ -49,7 +49,7 @@ export async function recordAudit(tx: Tx, input: AuditInput) {
     recordId: input.recordId ?? null,
     before: serialize(input.before),
     after: serialize(input.after),
-    reason: input.reason ?? null,
+    reason: input.reason ? maskSsnsInText(input.reason) : null,
     createdAt: new Date((input.at ?? new Date()).toISOString()),
     prevHash: last?.hash ?? GENESIS_HASH,
   };

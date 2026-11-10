@@ -39,6 +39,14 @@ export function maskDocumentNumber(value: string): string {
   return "*".repeat(value.length - 4) + value.slice(-4);
 }
 
+// Three, two, and four digits, with matching dashes, spaces, or nothing between the groups.
+const SSN_IN_TEXT = /(?<!\d)(\d{3})([- ]?)(\d{2})\2(\d{4})(?!\d)/g;
+
+/** Masks anything shaped like an SSN in free text, such as notes and reasons, before it is stored. */
+export function maskSsnsInText(text: string): string {
+  return text.replace(SSN_IN_TEXT, (_match, _area, _sep, _group, last: string) => `***-**-${last}`);
+}
+
 export function maskPii(field: PiiField, value: string): string {
   switch (field) {
     case "ssn":

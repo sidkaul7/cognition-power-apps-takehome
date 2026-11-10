@@ -3,7 +3,7 @@ import { decideApproval, findPendingApproval, requestApproval } from "@/platform
 import { recordAudit } from "@/platform/audit";
 import { prisma, type Tx } from "@/platform/db";
 import { NotFoundError, RuleError } from "@/platform/errors";
-import { revealPii, type PiiField } from "@/platform/pii";
+import { maskSsnsInText, revealPii, type PiiField } from "@/platform/pii";
 import { requirePermission, type Actor } from "@/platform/rbac/can";
 import { CASE_RECORD_TYPE, KYC_APP_ID, REJECTION_REASON_LABELS, type CaseStatus, type RejectionReasonCode } from "./constants";
 import { allowedDecisions, canClaim, type CaseDecision } from "./rules";
@@ -23,6 +23,7 @@ function snapshot(kase: Pick<KycCase, "status" | "assigneeId">) {
 
 /** Updates the case only if its status has not changed since it was read. */
 async function transition(tx: Tx, kase: KycCase, data: { status: CaseStatus } & Partial<Pick<KycCase, "assigneeId" | "decisionNote" | "rejectionReasonCode">>) {
+  if (data.decisionNote) data = { ...data, decisionNote: maskSsnsInText(data.decisionNote) };
   const result = await tx.kycCase.updateMany({ where: { id: kase.id, status: kase.status }, data });
   if (result.count !== 1) throw new RuleError("The case changed while you were working on it. Reload and try again.");
   return { ...kase, ...data };
@@ -149,7 +150,7 @@ async function secondApproval(
 
   const updated =
     decision === "approve"
-      ? await transition(tx, kase, { status: "approved" })
+      ? await transition(tx, kase, { status: "approved", decisionNote: input.note })
       : await transition(tx, kase, { status: "rejected", decisionNote: input.note, rejectionReasonCode: input.reasonCode ?? null });
   await recordAudit(tx, {
     actor: user,

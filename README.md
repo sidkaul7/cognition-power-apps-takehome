@@ -43,7 +43,7 @@ npm run dev
 
 Then open http://localhost:3000. There is no `.env` file to copy. The database is a local SQLite file at `prisma/dev.db`, and `npm run db:reset` recreates it with the seed data at any time.
 
-The default session secret is for the demo only. To override the defaults, set `DATABASE_URL` and `SESSION_SECRET`.
+The default session secret is for development and tests only. Production won't start without `SESSION_SECRET`. To override the defaults, set `DATABASE_URL` and `SESSION_SECRET`.
 
 ## Demo
 
@@ -121,7 +121,7 @@ Each tool lives in `src/apps/<tool-id>` and has one entry in `src/apps/registry.
 
 What is mocked today:
 
-- Sign-in is a demo user picker, to be replaced with OIDC through Okta or Entra ID in src/platform/auth
+- Sign-in is a demo user picker, to be replaced with OIDC through Okta or Entra ID in `src/platform/auth`
 - All customers, documents, and screening hits are seed data, and the screening lists are fictional
 - Documents are listed by file name only, with no storage or viewer
 
@@ -130,6 +130,7 @@ What production would need:
 - Real SSO with group-to-role mapping
 - Postgres with backups instead of SQLite
 - Write-once audit storage, such as an object store with retention locks, plus a periodic external anchor for the hash chain
+- Automated PII scanning of free-text fields such as decision notes and reasons
 - A deployment pipeline with environments and secrets management
 - A security review and penetration test
 

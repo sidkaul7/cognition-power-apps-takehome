@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id    String @id
+  name  String
+  email String @unique
+  role  String
+
+  assignedCases KycCase[] @relation("Assignee")
+}
+
+model AuditEvent {
+  id         Int      @id @default(autoincrement())
+  actorId    String?
+  actorName  String?
+  action     String
+  recordType String?
+  recordId   String?
+  before     String?
+  after      String?
+  reason     String?
+  createdAt  DateTime
+  prevHash   String   @unique
+  hash       String   @unique
+
+  @@index([recordType, recordId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model Approval {
+  id                 String    @id @default(cuid())
+  appId              String
+  recordType         String
+  recordId           String
+  summary            String
+  requiredPermission String
+  status             String    @default("pending")
+  requestedById      String
+  requestedByName    String
+  decidedById        String?
+  decidedByName      String?
+  reason             String?
+  createdAt          DateTime  @default(now())
+  decidedAt          DateTime?
+
+  @@index([status])
+  @@index([recordType, recordId])
+}
+
+model KycCase {
+  id                  String    @id
+  customerName        String
+  email               String
+  ssn                 String
+  dateOfBirth         String
+  address             String
+  country             String
+  riskLevel           String
+  riskScore           Int
+  status              String
+  assigneeId          String?
+  assignee            User?     @relation("Assignee", fields: [assigneeId], references: [id])
+  decisionNote        String?
+  rejectionReasonCode String?
+  createdAt           DateTime
+  slaDueAt            DateTime
+  updatedAt           DateTime  @updatedAt
+
+  documents     KycDocument[]
+  screeningHits KycScreeningHit[]
+
+  @@index([status])
+  @@index([slaDueAt])
+}
+
+model KycDocument {
+  id             String  @id
+  caseId         String
+  case           KycCase @relation(fields: [caseId], references: [id])
+  type           String
+  documentNumber String
+  fileName       String
+}
+
+model KycScreeningHit {
+  id          String  @id
+  caseId      String
+  case        KycCase @relation(fields: [caseId], references: [id])
+  type        String
+  matchedName String
+  sourceList  String
+  matchScore  Int
+}
